@@ -1,0 +1,15 @@
+LICENSE
+README.md
+pyproject.toml
+setup.py
+src/phantom_pureapi/__init__.py
+src/phantom_pureapi/exceptions.py
+src/phantom_pureapi/handlers.py
+src/phantom_pureapi/loggers.py
+src/phantom_pureapi/main.py
+src/phantom_pureapi/urls.py
+src/phantom_pureapi/utils.py
+src/phantom_pureapi.egg-info/PKG-INFO
+src/phantom_pureapi.egg-info/SOURCES.txt
+src/phantom_pureapi.egg-info/dependency_links.txt
+src/phantom_pureapi.egg-info/top_level.txt

@@ -1,0 +1,23 @@
+Metadata-Version: 2.1
+Name: phantom-pureapi
+Version: 0.0.1
+Summary: Proof of concept of a web framework that i always wanted
+Home-page: https://github.com/fedecar94/phantom-pureapi
+Author: Federico Cardozo
+Author-email: fedecar94@outlook.com
+License: UNKNOWN
+Project-URL: Bug Tracker, https://github.com/fedecar94/phantom-pureapi/issues
+Platform: UNKNOWN
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: GNU General Public License (GPL)
+Classifier: Operating System :: OS Independent
+Classifier: Development Status :: 2 - Pre-Alpha
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+License-File: LICENSE
+
+# Phantom pureapi
+
+It is just a framework that flies in my mind,
+and I always wanted to see if I can benefit from it
+

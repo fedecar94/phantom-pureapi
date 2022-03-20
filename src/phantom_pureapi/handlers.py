@@ -1,59 +1,64 @@
-from pathlib import Path
+from typing import List, Tuple, AnyStr
+from urllib.parse import parse_qs
+from .loggers import get_custom_logger
+from .mixins import HTMLResponseMixin, JSONResponseMixin, MsgPackResponseMixin
+from .auth import AuthHandler
+from .utils import get_content_type_from_headers
+from msgpack import dumps, loads
 
-import ujson
-from mako.template import Template
-from ujson import dumps
-
-from pureapi.exceptions import HttpException
-from pureapi.loggers import logger
-
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
-BASE_DIR = Path(__file__).resolve().parent.parent
+logger = get_custom_logger(__name__)
 
 
-class BaseHandler:
+class BaseHandler(HTMLResponseMixin, JSONResponseMixin, MsgPackResponseMixin):
     status_code = 200
     body = dict()
     headers = list()
-    template_name = 'default.html'
+    template_name = "default.html"
+    _auth_handler = AuthHandler()
 
-    def headers_as_html(self):
-        return self.headers + [
-            [b'content-type', b'text/html'],
-        ]
+    async def handle_event(self, redis, scope, receive):
+        headers = scope.get("headers", list())
+        user = await self.authenticate(headers)
+        content_type = get_content_type_from_headers(scope.get("headers"))
+        method = scope.get('method', 'GET').lower()
 
-    def _get_template_name(self):
-        template_name = BASE_DIR / 'phantom_pureapi' / 'templates' / self.template_name
-        logger.debug(template_name)
-        return str(template_name)
+        if method == 'get':
+            path = scope.get('path')
+            cached_response_key = f"{method}/{user.pk}/{content_type}/{path}"
+            cached_response = await redis.get(cached_response_key)
+            if cached_response is not None:
+                return loads(cached_response)
+            else:
+                event = b""
+        else:
+            event = await receive()
 
-    def _get_template_args(self, **kwargs):
-        kwargs.update(**self.body)
-        if 'title' not in kwargs:
-            kwargs['title'] = 'Default response'
-        kwargs['json'] = ujson.dumps(self.body)
-        kwargs['body'] = self.body
-        return kwargs
+        logger.debug("event: %s", event)
 
-    def as_html(self):
-        try:
-            response = Template(filename=self._get_template_name(),
-                                module_directory='/tmp/mako_modules')
-            return response.render(**self._get_template_args()).encode(encoding='UTF-8')
-        except Exception as e:
-            logger.error(e)
-            raise HttpException()
+        query_string = parse_qs(scope.get("query_string"))
+        logger.debug("query_string: %s", query_string)
 
-    def headers_as_json(self):
-        return self.headers + [
-            [b'content-type', b'aplication/json'],
-        ]
+        ####################
+        # TODO handle here #
+        ####################
 
-    def as_json(self):
-        try:
-            return dumps(self.body).encode(encoding='UTF-8')
-        except Exception as e:
-            logger.error(e)
-            raise HttpException()
+        headers_func_name = f"headers_as_{content_type.split('/')[1]}"
+        headers_func = self.__getattribute__(headers_func_name)
 
+        body_func_name = f"body_as_{content_type.split('/')[1]}"
+        body_func = self.__getattribute__(body_func_name)
 
+        response_dict = {
+            b"headers": headers_func(),
+            b"body": body_func(),
+            b"status_code": self.status_code
+        }
+
+        if method == 'get':
+            await redis.set(cached_response_key, dumps(response_dict))
+            await redis.pexpire(cached_response_key, 60 * 1000)
+
+        return response_dict
+
+    def authenticate(self, headers: List[Tuple[AnyStr, AnyStr]] = None):
+        return self._auth_handler(headers or list())

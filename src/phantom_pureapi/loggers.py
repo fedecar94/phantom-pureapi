@@ -1,26 +1,27 @@
-import logging.config
+import logging
+from colorlog import ColoredFormatter, StreamHandler
 
-LOGGING_CONFIG: dict = {
-    "version": 1,
-    "disable_existing_loggers": False,
-    "formatters": {
-        "main": {
-            "()": "uvicorn.logging.DefaultFormatter",
-            "fmt": "%(levelprefix)s %(filename)s %(lineno)d %(asctime)s\n%(message)s",
-            "use_colors": True,
-        },
-    },
-    "handlers": {
-        "main": {
-            "formatter": "main",
-            "class": "logging.StreamHandler",
-            "stream": "ext://sys.stderr",
-        },
-    },
-    "loggers": {
-        "main": {"handlers": ["main"], "level": "DEBUG"},
-    },
-}
 
-logging.config.dictConfig(LOGGING_CONFIG)
-logger = logging.getLogger('main')
+def get_custom_logger(name):
+    formatter = ColoredFormatter(
+        "{log_color}{levelname: <9} {asctime} {name}{reset}{blue} -> {message}",
+        datefmt=None,
+        reset=True,
+        log_colors={
+            "DEBUG": "cyan",
+            "INFO": "green",
+            "WARNING": "yellow",
+            "ERROR": "bold_red",
+            "CRITICAL": "red,bg_white",
+        },
+        secondary_log_colors={},
+        style="{",
+    )
+
+    handler = StreamHandler()
+    handler.setFormatter(formatter)
+
+    logger = logging.getLogger(name)
+    logger.setLevel(logging.INFO)
+    logger.addHandler(handler)
+    return logger

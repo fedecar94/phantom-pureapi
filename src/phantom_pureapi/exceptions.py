@@ -1,5 +1,6 @@
+from typing import AnyStr
 
-from ujson import dumps
+import pureapi.mixins
 
 
 class PathException(Exception):
@@ -10,29 +11,46 @@ class PathException(Exception):
 
 
 class PathTypeException(Exception):
-    message = 'Your path is not the correct type'
+    message = "Your path is not the correct type"
 
     def __str__(self):
         return self.message
 
 
-class HttpException(Exception):
-    title = 'Unexpected Error'
-    message = '¯\\_(ツ)_/¯'
+class HttpException(Exception, pureapi.mixins.HTMLResponseMixin, pureapi.mixins.JSONResponseMixin):
+    title = "Unexpected Error"
+    message = "¯\\_(ツ)_/¯"
     status_code = 500
     error_code = 500
+    template_name = "error.html"
 
-    def as_json(self):
-        response = {
-            'title': self.title,
-            'message': self.message,
-            'error_code': self.error_code,
+    def __init__(self):
+        self.body = {
+            "title": self.title,
+            "message": self.message,
+            "error_code": self.error_code,
         }
-        return dumps(response).encode(encoding='UTF-8')
+
+    def get_headers(self, content_type: AnyStr = b"application/json"):
+        if content_type == b"text/html":
+            return self.headers_as_html()
+        return self.headers_as_json()
+
+    def get_body(self, content_type: AnyStr = b"application/json"):
+        if content_type == b"text/html":
+            return self.body_as_html()
+        return self.body_as_json()
+
+
+class HTTP401(HttpException):
+    title = "Unauthorized"
+    message = "the request lacks valid authentication credentials"
+    status_code = 401
+    error_code = 401
 
 
 class HTTP404(HttpException):
-    title = 'Not found'
-    message = 'the resource you are looking for may not exist'
+    title = "Not found"
+    message = "the resource you are looking for may not exist"
     status_code = 404
     error_code = 404

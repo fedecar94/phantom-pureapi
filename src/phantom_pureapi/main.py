@@ -1,11 +1,13 @@
 from pathlib import Path
+import aioredis
 from typing import Type, List, Dict, Union
-from urllib.parse import parse_qs
 
-from phantom_pureapi import exceptions, utils
+from pureapi import exceptions, utils
 from .handlers import BaseHandler
-from .loggers import logger
 from .urls import list_to_dict, UrlPath, SubPath
+from .loggers import get_custom_logger
+
+logger = get_custom_logger(__name__)
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -16,64 +18,42 @@ class PureApi:
 
     def __init__(self) -> None:
         # TODO: init redis and psql here
-        pass
+        self.redis = aioredis.from_url("redis://localhost")
 
     async def __call__(self, scope, receive, send):
-        logger.warning('-> Incomming request!')
-        logger.debug(scope)
-
-        headers = scope.get('headers')
-        logger.debug(headers)
-        accept_list, language_list = utils.parse_headers(headers)
-
-        query_string = parse_qs(scope.get('query_string'))
-        logger.debug(query_string)
-
-        event = await receive()
-        logger.debug(event)
+        logger.info("Incomming request!")
+        logger.debug("scope: %s", scope)
 
         try:
-            handler = self._get_handler(scope['path'])
-            logger.debug(handler)
-            response = handler()
+            handler = self._get_handler(scope["path"])
+            logger.debug("handler: %s", handler)
+            response = await handler.handle_event(redis=self.redis, scope=scope, receive=receive)
+            await send({
+                "type": "http.response.start",
+                "status": response[b'status_code'],
+                "headers": response[b'headers'],
+            })
+            await send({
+                "type": "http.response.body",
+                "body": response[b'body'],
+            })
         except exceptions.HttpException as ex:
+            content_type = utils.get_content_type_from_headers(scope.get("headers"))
             await send({
-                'type': 'http.response.start',
-                'status': ex.status_code,
-                'headers': [
-                    [b'content-type', b'aplication/json'],
-                ]
+                "type": "http.response.start",
+                "status": ex.status_code,
+                "headers": ex.get_headers(content_type),
             })
             await send({
-                'type': 'http.response.body',
-                'body': ex.as_json(),
-            })
-        else:
-            if b'text/html' in accept_list:
-                await send({
-                    'type': 'http.response.start',
-                    'status': 200,
-                    'headers': response.headers_as_html()
-                })
-                await send({
-                    'type': 'http.response.body',
-                    'body': response.as_html(),
-                })
-                return
-            await send({
-                'type': 'http.response.start',
-                'status': 200,
-                'headers': response.headers_as_json()
-            })
-            await send({
-                'type': 'http.response.body',
-                'body': response.as_json(),
+                "type": "http.response.body",
+                "body": ex.get_body(content_type),
             })
 
     def _get_handler(self, request_path: str) -> Type[BaseHandler]:
         logger.debug(request_path)
         if request_path in self._urlpatterns:
-            return self._urlpatterns[request_path]
+            handler = self._urlpatterns[request_path]
+            return handler()
         else:
             raise exceptions.HTTP404
 
